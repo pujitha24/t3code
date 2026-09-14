@@ -2611,7 +2611,7 @@ struct FeatureMessageView: View {
         }
     }
 
-    private var messageBody: some View {
+    @ViewBuilder private var messageBody: some View {
         switch message.role {
         case .user:
             HStack {
