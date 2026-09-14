@@ -773,8 +773,8 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
         for environment in alternatives {
             try Task.checkCancellation()
             guard await routingAllowed(origin: origin, destination: environment, write: write) else { continue }
-            let alternate = try await projectCreationClient(environmentID: environment.id)
-            guard GitHubRoutingGrant.connectionKey(alternate.environment) == GitHubRoutingGrant.connectionKey(environment),
+            guard let alternate = try? await projectCreationClient(environmentID: environment.id),
+                  GitHubRoutingGrant.connectionKey(alternate.environment) == GitHubRoutingGrant.connectionKey(environment),
                   let account = try? await alternate.pullRequestRoutingIdentity(host: identity.host),
                   account.provider == .github, account.accountId == identity.accountId,
                   account.host.caseInsensitiveCompare(identity.host) == .orderedSame,
@@ -816,16 +816,17 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
     func pullRequestDiff(_ target: FeaturePullRequestTarget, cursor: String?) async throws
         -> PullRequestDiffResult
     {
-        try await projectCreationClient(environmentID: target.environmentID).pullRequestDiff(
-            PullRequestDiffInput(
-                projectId: target.reference.projectId,
-                repository: target.reference.repository,
-                number: target.reference.number,
+        try await withPullRequestRoute(target) { client, reference, _ in
+            try await client.pullRequestDiff(PullRequestDiffInput(
+                projectId: reference.projectId,
+                repository: reference.repository,
+                number: reference.number,
                 cursor: cursor,
                 commit: nil,
-                host: target.reference.host
-            )
-        )
+                host: reference.host,
+                expectedAccountId: reference.expectedAccountId
+            ))
+        }
     }
 
     func runPullRequestAction(
@@ -1815,7 +1816,7 @@ final class NativeFeatureClient: FeatureClient, FeatureDeviceManaging,
         }
         let project = latestSnapshot?.projects.first {
             $0.environmentID == route.environmentID
-                && $0.repositoryIdentity?.canonicalKey.lowercased() == "\(key.host)/\(key.repository)"
+                && $0.repositoryIdentity.map { key.matchesRepository($0.canonicalKey) } == true
         }
         guard let command = ThreadPullRequests.mutation(
             threadID: route.wireID, key: key, url: url, linked: linked,

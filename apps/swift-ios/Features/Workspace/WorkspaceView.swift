@@ -1320,7 +1320,7 @@ struct FeatureThreadRow: View {
                     projectId: linked.projectId,
                     repository: linked.repository,
                     number: linked.number,
-                    host: URL(string: linked.url)?.host
+                    host: ThreadPullRequests.authority(of: linked.url)
                 )
             )
             while !Task.isCancelled {
