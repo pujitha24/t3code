@@ -1321,7 +1321,8 @@ private final class SwipeSettlementClientStub: FeatureClient {
         worktreePath: String?,
         startFromOrigin: Bool,
         attachments: [FeatureUploadAttachment],
-        identity: FeatureSubmissionIdentity
+        identity: FeatureSubmissionIdentity,
+        context: OrchestrationMessageContext? = nil
     ) async throws -> FeatureThread {
         FeatureThread(id: identity.threadID, projectID: projectID, title: prompt)
     }
@@ -1331,7 +1332,8 @@ private final class SwipeSettlementClientStub: FeatureClient {
         selection: FeatureSelection?,
         runtimeMode: FeatureRuntimeMode,
         attachments: [FeatureUploadAttachment],
-        identity: FeatureSubmissionIdentity
+        identity: FeatureSubmissionIdentity,
+        context: OrchestrationMessageContext? = nil
     ) async throws {}
     func resolveUserInput(
         id: String,

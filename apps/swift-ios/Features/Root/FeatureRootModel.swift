@@ -405,7 +405,8 @@ public final class FeatureRootModel {
                 branch: request.branch,
                 worktreePath: request.worktreePath,
                 startFromOrigin: request.startFromOrigin
-            )
+            ),
+            context: request.context
         )
         guard await enqueue(queued) else { return nil }
         installPendingCreation(queued, project: project)
@@ -424,7 +425,8 @@ public final class FeatureRootModel {
                 worktreePath: request.worktreePath,
                 startFromOrigin: request.startFromOrigin,
                 attachments: uploads,
-                identity: identity
+                identity: identity,
+                context: request.context
             )
             if !(await completeQueuedSubmission(queued)) {
                 scheduleOutboxRetry()
@@ -723,7 +725,8 @@ public final class FeatureRootModel {
             selection: submission.selection,
             runtimeMode: thread.runtimeMode,
             interactionMode: thread.interactionMode,
-            attachments: uploads
+            attachments: uploads,
+            context: submission.context
         )
         guard await enqueue(queued) else { return false }
 
@@ -739,9 +742,11 @@ public final class FeatureRootModel {
                     name: $0.filename,
                     mimeType: $0.mimeType,
                     sizeBytes: $0.byteCount,
-                    previewData: $0.thumbnailData
+                    previewData: $0.thumbnailData,
+                    source: $0.source
                 )
-            }
+            },
+            context: submission.context
         )
         mutateDetail(
             id: submission.threadID,
@@ -762,7 +767,8 @@ public final class FeatureRootModel {
                 selection: submission.selection,
                 runtimeMode: queued.runtimeMode,
                 attachments: uploads,
-                identity: identity
+                identity: identity,
+                context: submission.context
             )
             if !(await completeQueuedSubmission(queued)) {
                 scheduleOutboxRetry()
@@ -1498,14 +1504,16 @@ public final class FeatureRootModel {
             text: submission.text,
             createdAt: submission.identity.createdAt,
             state: .queued,
-            attachments: submission.attachments.enumerated().map { index, attachment in
+            attachments: submission.attachments.map { attachment in
                 FeatureMessageAttachment(
-                    id: "\(submission.id)-attachment-\(index)",
+                    id: attachment.id.uuidString,
                     name: attachment.name,
                     mimeType: attachment.mimeType,
-                    sizeBytes: attachment.byteCount ?? attachment.data?.count ?? 0
+                    sizeBytes: attachment.byteCount ?? attachment.data?.count ?? 0,
+                    source: attachment.source
                 )
-            }
+            },
+            context: submission.context
         )
     }
 
@@ -1776,7 +1784,8 @@ public final class FeatureRootModel {
                             worktreePath: creation.worktreePath,
                             startFromOrigin: creation.startFromOrigin,
                             attachments: submission.uploads,
-                            identity: submission.identity
+                            identity: submission.identity,
+                            context: submission.context
                         )
                         guard !Task.isCancelled,
                               outboxGeneration == generation else { return false }
@@ -1795,7 +1804,8 @@ public final class FeatureRootModel {
                             selection: submission.selection,
                             runtimeMode: submission.runtimeMode,
                             attachments: submission.uploads,
-                            identity: submission.identity
+                            identity: submission.identity,
+                            context: submission.context
                         )
                         guard !Task.isCancelled,
                               outboxGeneration == generation else { return false }

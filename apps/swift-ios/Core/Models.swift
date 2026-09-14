@@ -119,6 +119,7 @@ public struct EnvironmentDescriptor: Codable, Equatable, Sendable {
         public var environmentIcon: Bool? = nil
         public var usageLimitSources: Bool? = nil
         public var questionAttachments: Bool? = nil
+        public var inlineMessageContext: Bool? = nil
 
         private enum CodingKeys: String, CodingKey {
             case repositoryIdentity
@@ -138,6 +139,7 @@ public struct EnvironmentDescriptor: Codable, Equatable, Sendable {
             case environmentIcon
             case usageLimitSources
             case questionAttachments
+            case inlineMessageContext
         }
 
         public init(from decoder: any Decoder) throws {
@@ -145,6 +147,7 @@ public struct EnvironmentDescriptor: Codable, Equatable, Sendable {
             environmentIcon = try container.decodeIfPresent(Bool.self, forKey: .environmentIcon)
             usageLimitSources = try container.decodeIfPresent(Bool.self, forKey: .usageLimitSources)
             questionAttachments = try container.decodeIfPresent(Bool.self, forKey: .questionAttachments)
+            inlineMessageContext = try container.decodeIfPresent(Bool.self, forKey: .inlineMessageContext)
             repositoryIdentity =
                 try container.decodeIfPresent(Bool.self, forKey: .repositoryIdentity) ?? false
             connectionProbe = try container.decodeIfPresent(Bool.self, forKey: .connectionProbe)
@@ -501,6 +504,7 @@ public struct OrchestrationMessage: Codable, Identifiable, Equatable, Sendable {
     public let streaming: Bool
     public let createdAt: String
     public let updatedAt: String
+    public var context: OrchestrationMessageContext? = nil
 }
 
 public struct ChatAttachment: Codable, Identifiable, Equatable, Sendable {
@@ -509,6 +513,7 @@ public struct ChatAttachment: Codable, Identifiable, Equatable, Sendable {
     public let name: String
     public let mimeType: String
     public let sizeBytes: Int
+    public var source: JSONValue? = nil
 }
 
 public struct OrchestrationActivity: Codable, Identifiable, Equatable, Sendable {

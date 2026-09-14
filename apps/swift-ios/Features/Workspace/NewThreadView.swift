@@ -18,6 +18,7 @@ public struct NewThreadView: View {
     @State private var selectionIsExplicit = false
     @State private var preferredSelection: FeatureSelection?
     @State private var attachments: [FeatureDraftAttachment] = []
+    @State private var composerContext: OrchestrationMessageContext?
     @State private var workspaceMode: FeatureWorkspaceMode = .local
     @State private var workspaceSelectionIsExplicit = false
     @State private var branches: [FeatureWorkspaceBranch] = []
@@ -120,7 +121,8 @@ public struct NewThreadView: View {
                         onDismissKeyboard: { promptFocused = false },
                         onRefreshModels: refreshSelectedEnvironmentModels,
                         draftSaveError: draftSaveError,
-                        onRetryDraftSave: persistCurrentDraftImmediately
+                        onRetryDraftSave: persistCurrentDraftImmediately,
+                        context: contextBinding
                     )
                 }
                 .background(T3Colors.background)
@@ -810,7 +812,8 @@ public struct NewThreadView: View {
                 draftKey: draftKey ?? FeatureComposerDraftStore.newTaskKey(project: project),
                 environmentID: project.environmentID,
                 attachments: attachments
-            )
+            ),
+            context: composerContext
         )
 
         Task { @MainActor in
@@ -926,6 +929,7 @@ public struct NewThreadView: View {
         draftSaveTask = nil
         prompt = carryingContent?.text ?? ""
         attachments = carryingContent?.attachments ?? []
+        composerContext = carryingContent?.context
         selectionIsExplicit = false
         workspaceSelectionIsExplicit = false
         branches = []
@@ -1082,6 +1086,7 @@ public struct NewThreadView: View {
         )
         prompt = restored.text
         attachments = restored.attachments
+        composerContext = restored.context
         selection = DailyUXModelOptions.validated(restored.selection, in: creationProviders)
             ?? initialSelection
         selectionIsExplicit = liveSelectionIsExplicit || saved?.selection != nil
@@ -1122,6 +1127,13 @@ public struct NewThreadView: View {
         return draftKey(for: project)
     }
 
+    private var contextBinding: Binding<OrchestrationMessageContext?> {
+        Binding(get: { composerContext }, set: { value in
+            composerContext = value
+            scheduleDraftSave()
+        })
+    }
+
     private var attachmentBinding: Binding<[FeatureDraftAttachment]> {
         Binding(
             get: { attachments },
@@ -1155,7 +1167,8 @@ public struct NewThreadView: View {
                         : nil,
                     startFromOrigin: startFromOrigin
                 )
-                : nil
+                : nil,
+            context: composerContext
         )
     }
 
@@ -1312,7 +1325,8 @@ struct NewTaskDraftRestoreContext: Equatable {
                     attachment.uploadedReference = nil
                 }
                 return attachment
-            }
+            },
+            context: draft.context
         )
     }
 
@@ -1337,6 +1351,7 @@ struct NewTaskDraftRestoreContext: Equatable {
             target = saved ?? FeatureComposerDraft()
             target?.text = baseline.text
             target?.attachments = baseline.attachments
+            target?.context = baseline.context
         }
         var restored = FeatureComposerDraftRestoration.merge(
             saved: target,

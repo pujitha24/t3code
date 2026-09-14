@@ -452,6 +452,7 @@ public enum FeatureMessageState: String, Sendable, Codable {
 }
 
 public struct FeatureMessageAttachment: Identifiable, Sendable, Equatable, Hashable, Codable {
+    public var source: PastedTextAttachmentSource?
     public let id: String
     public var name: String
     public var mimeType: String
@@ -467,7 +468,8 @@ public struct FeatureMessageAttachment: Identifiable, Sendable, Equatable, Hasha
         mimeType: String,
         sizeBytes: Int,
         url: URL? = nil,
-        previewData: Data? = nil
+        previewData: Data? = nil,
+        source: PastedTextAttachmentSource? = nil
     ) {
         self.id = id
         self.name = name
@@ -475,10 +477,12 @@ public struct FeatureMessageAttachment: Identifiable, Sendable, Equatable, Hasha
         self.sizeBytes = sizeBytes
         self.url = url
         self.previewData = previewData
+        self.source = source
     }
 }
 
 public struct FeatureUploadAttachment: Sendable, Equatable {
+    public var source: PastedTextAttachmentSource?
     public let id: UUID
     private var inlineData: Data?
     public var ownedFile: FeatureOwnedAttachmentFile?
@@ -491,7 +495,8 @@ public struct FeatureUploadAttachment: Sendable, Equatable {
         data: Data,
         name: String,
         mimeType: String,
-        uploadedReference: FeatureUploadedAttachmentReference? = nil
+        uploadedReference: FeatureUploadedAttachmentReference? = nil,
+        source: PastedTextAttachmentSource? = nil
     ) {
         self.id = id
         inlineData = data
@@ -499,6 +504,7 @@ public struct FeatureUploadAttachment: Sendable, Equatable {
         self.name = name
         self.mimeType = mimeType
         self.uploadedReference = uploadedReference
+        self.source = source
     }
 
     public init(
@@ -506,7 +512,8 @@ public struct FeatureUploadAttachment: Sendable, Equatable {
         ownedFile: FeatureOwnedAttachmentFile,
         name: String,
         mimeType: String,
-        uploadedReference: FeatureUploadedAttachmentReference? = nil
+        uploadedReference: FeatureUploadedAttachmentReference? = nil,
+        source: PastedTextAttachmentSource? = nil
     ) {
         self.id = id
         inlineData = nil
@@ -514,6 +521,7 @@ public struct FeatureUploadAttachment: Sendable, Equatable {
         self.name = name
         self.mimeType = mimeType
         self.uploadedReference = uploadedReference
+        self.source = source
     }
 
     public init(_ draft: FeatureDraftAttachment) {
@@ -523,6 +531,7 @@ public struct FeatureUploadAttachment: Sendable, Equatable {
         name = draft.filename
         mimeType = draft.mimeType
         uploadedReference = draft.uploadedReference
+        source = draft.source
     }
 
     public var data: Data {
@@ -539,6 +548,7 @@ public struct FeatureUploadAttachment: Sendable, Equatable {
 }
 
 public struct FeatureMessage: Identifiable, Sendable, Equatable, Hashable, Codable {
+    public var context: OrchestrationMessageContext?
     public let id: String
     public var role: FeatureMessageRole
     public var text: String
@@ -559,7 +569,8 @@ public struct FeatureMessage: Identifiable, Sendable, Equatable, Hashable, Codab
         toolName: String? = nil,
         attachments: [FeatureMessageAttachment] = [],
         workLogImagePaths: [String]? = nil,
-        activeWorkLabel: String? = nil
+        activeWorkLabel: String? = nil,
+        context: OrchestrationMessageContext? = nil
     ) {
         self.id = id
         self.role = role
@@ -570,6 +581,7 @@ public struct FeatureMessage: Identifiable, Sendable, Equatable, Hashable, Codab
         self.attachments = attachments
         self.workLogImagePaths = workLogImagePaths
         self.activeWorkLabel = activeWorkLabel
+        self.context = context
     }
 }
 
