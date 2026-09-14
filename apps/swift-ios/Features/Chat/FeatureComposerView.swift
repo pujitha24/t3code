@@ -29,6 +29,7 @@ struct FeatureComposerUploadStatus {
 
 struct FeatureComposerView: View {
     @SwiftUI.Environment(\.scenePhase) private var scenePhase
+    @SwiftUI.Environment(\.isEnabled) private var isEnabled
     @State private var isManuallyExpanded = false
     @State private var isAttachmentFlowActive = false
     @State private var isModelPickerPresented = false
@@ -350,7 +351,7 @@ struct FeatureComposerView: View {
                     focused: $focused,
                     placeholder: composerPlaceholder,
                     acceptsImages: imagesAllowed,
-                    isReadOnly: voiceInputController.isBusy,
+                    isReadOnly: voiceInputController.isBusy || !isEnabled,
                     skills: powerFeatures.enabledSkills,
                     selectionRequest: textSelectionRequest,
                     onSelectionChange: handleTextSelectionChange,
