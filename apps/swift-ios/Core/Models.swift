@@ -114,6 +114,8 @@ public struct EnvironmentDescriptor: Codable, Equatable, Sendable {
         public let threadPinning: Bool?
         public let threadTitleRegeneration: Bool?
         public let threadPullRequestLinking: Bool?
+        public var threadPullRequests: Bool? = nil
+        public var pullRequestStackActions: Bool? = nil
         public let serverSelfUpdate: String?
         public let serverSelfUpdateProgress: Bool?
         public var environmentIcon: Bool? = nil
@@ -133,6 +135,8 @@ public struct EnvironmentDescriptor: Codable, Equatable, Sendable {
             case threadPinning
             case threadTitleRegeneration
             case threadPullRequestLinking
+            case threadPullRequests
+            case pullRequestStackActions
             case serverSelfUpdate
             case serverSelfUpdateProgress
             case environmentIcon
@@ -173,6 +177,8 @@ public struct EnvironmentDescriptor: Codable, Equatable, Sendable {
                 Bool.self,
                 forKey: .threadPullRequestLinking
             )
+            threadPullRequests = try container.decodeIfPresent(Bool.self, forKey: .threadPullRequests)
+            pullRequestStackActions = try container.decodeIfPresent(Bool.self, forKey: .pullRequestStackActions)
             serverSelfUpdate = try container.decodeIfPresent(String.self, forKey: .serverSelfUpdate)
             serverSelfUpdateProgress = try container.decodeIfPresent(
                 Bool.self,
@@ -470,6 +476,7 @@ public struct OrchestrationThreadShell: Codable, Identifiable, Equatable, Sendab
     public let branch: String?
     public let worktreePath: String?
     public var linkedPullRequest: ThreadLinkedPullRequest? = nil
+    public var pullRequests: [ThreadPullRequestLink]? = nil
     public var branchPullRequest: ThreadLinkedPullRequest? = nil
     public let latestTurn: OrchestrationLatestTurn?
     public let createdAt: String
@@ -549,6 +556,7 @@ public struct OrchestrationThread: Codable, Identifiable, Equatable, Sendable {
     public let branch: String?
     public let worktreePath: String?
     public var linkedPullRequest: ThreadLinkedPullRequest? = nil
+    public var pullRequests: [ThreadPullRequestLink]? = nil
     public var branchPullRequest: ThreadLinkedPullRequest? = nil
     public let latestTurn: OrchestrationLatestTurn?
     public let createdAt: String

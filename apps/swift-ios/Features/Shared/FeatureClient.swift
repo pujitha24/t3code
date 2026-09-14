@@ -52,6 +52,7 @@ public protocol FeatureClient: AnyObject {
     func setThreadSettled(id: String, settled: Bool) async throws
     func setThreadSnoozed(id: String, until: Date?) async throws
     func setThreadPinned(id: String, pinned: Bool) async throws
+    func setThreadPullRequest(id: String, url: String, linked: Bool) async throws
     func setRuntimeMode(id: String, mode: FeatureRuntimeMode) async throws
     func setInteractionMode(id: String, mode: FeatureInteractionMode) async throws
     func deleteThread(id: String) async throws
@@ -82,6 +83,8 @@ public protocol FeatureClient: AnyObject {
     func serverPreferences(environmentID: String) async throws -> ServerSettingsSnapshot
     func updateServerPreferences(environmentID: String, change: ServerSettingsChange) async throws
     func sharedPreferenceMismatches(environmentID: String) -> [String]
+    func gitHubRoutingPermission(environmentID: String) async throws -> GitHubRoutingPermission
+    func setGitHubRoutingPermission(environmentID: String, permission: GitHubRoutingPermission) async throws
     func refreshProviders(environmentID: String) async throws -> [FeatureProvider]
     func refreshWorkspaceProviders(environmentID: String, cwd: String, instanceID: String) async throws -> [FeatureProvider]
     func providerSetup(environmentID: String, instanceID: String, action: ProviderSetupAction) async throws -> ProviderSetupEvent
@@ -213,6 +216,13 @@ public protocol FeatureClient: AnyObject {
 }
 
 public extension FeatureClient {
+    func gitHubRoutingPermission(environmentID: String) async throws -> GitHubRoutingPermission { .off }
+    func setGitHubRoutingPermission(environmentID: String, permission: GitHubRoutingPermission) async throws {
+        throw FeatureCapabilityUnavailable("GitHub sharing")
+    }
+    func setThreadPullRequest(id: String, url: String, linked: Bool) async throws {
+        throw FeatureCapabilityUnavailable("Pull request linking")
+    }
     func serverPreferences(environmentID: String) async throws -> ServerSettingsSnapshot {
         throw FeatureCapabilityUnavailable("Server preferences")
     }
