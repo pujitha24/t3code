@@ -57,6 +57,7 @@ struct FeatureComposerView: View {
     private let onRefreshModels: (() async throws -> Void)?
     private let draftSaveError: String?
     private let onRetryDraftSave: (() -> Void)?
+    private let onInputPreparationChange: ((Bool) -> Void)?
     private let threadSelection: FeatureSelection?
     private let materializesDefaultSelection: Bool
     private let isSending: Bool
@@ -107,7 +108,8 @@ struct FeatureComposerView: View {
         onUserInputDismiss: ((String) async -> Void)? = nil,
         onRefreshModels: (() async throws -> Void)? = nil,
         draftSaveError: String? = nil,
-        onRetryDraftSave: (() -> Void)? = nil
+        onRetryDraftSave: (() -> Void)? = nil,
+        onInputPreparationChange: ((Bool) -> Void)? = nil
     ) {
         _text = text
         _selection = selection
@@ -118,6 +120,7 @@ struct FeatureComposerView: View {
         self.environmentIsConnected = environmentIsConnected
         self.attachmentUploads = attachmentUploads
         self.attachmentPreferences = attachmentPreferences
+        self.onInputPreparationChange = onInputPreparationChange
         self.onRefreshModels = onRefreshModels
         self.draftSaveError = draftSaveError
         self.onRetryDraftSave = onRetryDraftSave
@@ -281,6 +284,9 @@ struct FeatureComposerView: View {
                 .stroke(T3Colors.inputBorder, lineWidth: 1)
         }
         .clipShape(composerShape)
+        .onChange(of: attachmentPreparation.isPreparing || isAttachmentFlowActive || voiceInputController.isBusy, initial: true) { _, busy in
+            onInputPreparationChange?(busy)
+        }
         .modifier(
             FeatureComposerImageDrop(
                 isEnabled: imagesAllowed && !voiceInputController.isBusy,
