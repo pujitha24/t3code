@@ -6,6 +6,7 @@ struct FeatureWorkspaceNavigationRequest: Equatable, Sendable {
         case thread(id: String)
         case project(id: String)
         case newTask(projectID: String?)
+        case usageLimits
     }
 
     let id: UUID
@@ -55,6 +56,7 @@ public struct WorkspaceView: View {
     @State private var showingAddProject = false
     @State private var showingEnvironments = false
     @State private var showingSettings = false
+    @State private var showingUsageLimits = false
     @State private var renamingThread: FeatureThread?
     @State private var deletingThread: FeatureThread?
     @State private var renameTitle = ""
@@ -116,6 +118,17 @@ public struct WorkspaceView: View {
             .presentationDragIndicator(.visible)
             .onAppear { model.setConnectionManagementPresented(true) }
             .onDisappear { model.setConnectionManagementPresented(false) }
+        }
+        .sheet(isPresented: $showingUsageLimits) {
+            NavigationStack {
+                UsageView(client: model.client, initiallyShowsLimits: true)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button("Done") { showingUsageLimits = false }
+                        }
+                    }
+            }
+            .preferredColorScheme(.dark)
         }
         .sheet(isPresented: $showingSettings) {
             SettingsView(model: model)
@@ -605,6 +618,12 @@ public struct WorkspaceView: View {
     private func consumeNavigationRequest() {
         guard let navigationRequest else { return }
         switch navigationRequest.destination {
+        case .usageLimits:
+            dismissTransientPresentations()
+            Task { @MainActor in
+                await Task.yield()
+                showingUsageLimits = true
+            }
         case let .thread(id):
             guard model.snapshot.threads.contains(where: { $0.id == id }) else { return }
             dismissTransientPresentations()
@@ -633,6 +652,7 @@ public struct WorkspaceView: View {
         showingAddProject = false
         showingEnvironments = false
         showingSettings = false
+        showingUsageLimits = false
         renamingThread = nil
     }
 
