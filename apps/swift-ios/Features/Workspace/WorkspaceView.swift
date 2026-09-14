@@ -55,6 +55,7 @@ public struct WorkspaceView: View {
     @State private var showingAddProject = false
     @State private var showingEnvironments = false
     @State private var showingSettings = false
+    @State private var settingsProject: FeatureProject?
     @State private var renamingThread: FeatureThread?
     @State private var deletingThread: FeatureThread?
     @State private var renameTitle = ""
@@ -103,6 +104,9 @@ public struct WorkspaceView: View {
         }
         .sheet(isPresented: $showingAddProject) {
             AddProjectView(model: model)
+        }
+        .sheet(item: $settingsProject) { project in
+            ProjectPreferencesSheet(model: model, projectID: project.id)
         }
         .sheet(isPresented: $showingEnvironments) {
             NavigationStack {
@@ -489,6 +493,12 @@ public struct WorkspaceView: View {
                         } else {
                             Text(title)
                         }
+                    }
+                }
+                if let selectedProject {
+                    Divider()
+                    Button("Project settings", systemImage: "gearshape") {
+                        settingsProject = selectedProject
                     }
                 }
             } label: {
