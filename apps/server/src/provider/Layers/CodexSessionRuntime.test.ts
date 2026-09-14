@@ -609,6 +609,11 @@ describe("T3 browser developer instructions", () => {
       NodeAssert.match(instructions, /preview_status/);
       NodeAssert.match(instructions, /preview_open/);
       NodeAssert.match(instructions, /Do not switch to global browser skills/);
+      // Bundled Codex Computer Use must be named as a separate surface so the
+      // model doesn't read an IAB failure as T3 preview being unavailable.
+      NodeAssert.match(instructions, /cua_repl/);
+      NodeAssert.match(instructions, /unified-computer-use/);
+      NodeAssert.match(instructions, /Browser is not available: iab/);
     }
   });
 
@@ -621,6 +626,8 @@ describe("T3 browser developer instructions", () => {
       // Steering away from other browser automation must go with the tools;
       // keeping it would leave the model talked out of its only option.
       NodeAssert.doesNotMatch(instructions, /Do not switch to global browser skills/);
+      NodeAssert.doesNotMatch(instructions, /cua_repl/);
+      NodeAssert.doesNotMatch(instructions, /unified-computer-use/);
       // The rest of the collaboration mode is untouched.
       NodeAssert.match(instructions, /<collaboration_mode>/);
       NodeAssert.match(instructions, /<\/collaboration_mode>/);
@@ -633,6 +640,17 @@ describe("T3 browser developer instructions", () => {
       buildCodexDeveloperInstructions("default", runtime, false),
       /preview_open/,
     );
+  });
+
+  it("does not add browser collision steering when only device tools are attached", () => {
+    const instructions = buildCodexDeveloperInstructions("default", runtime, {
+      browser: false,
+      device: true,
+    });
+    NodeAssert.match(instructions, /device_open/);
+    NodeAssert.doesNotMatch(instructions, /preview_status/);
+    NodeAssert.doesNotMatch(instructions, /cua_repl/);
+    NodeAssert.doesNotMatch(instructions, /unified-computer-use/);
   });
 });
 
