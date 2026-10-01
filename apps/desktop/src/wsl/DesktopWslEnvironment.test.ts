@@ -5,19 +5,24 @@ import * as NodeChildProcess from "node:child_process";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Sink from "effect/Sink";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import { ChildProcessSpawner } from "effect/unstable/process";
 
+import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import {
   buildWslRuntimeInstallScript,
   buildWslRuntimeInvalidateScript,
   buildWslRuntimePruneScript,
   buildWslRuntimeProbeScript,
   DesktopWslDistroListError,
+  DesktopWslEnvironment,
   formatMissingToolsReason,
+  layer as desktopWslEnvironmentLayer,
   parseNodePath,
   parseNodeVersion,
   parseResolvedPath,
@@ -140,6 +145,134 @@ describe("probeWslDistros", () => {
       expect(error).toBeInstanceOf(DesktopWslDistroListError);
       expect(error.message).toContain("timed out");
     }).pipe(Effect.provide(layer));
+  });
+});
+
+// Stands in for wsl.exe on a distro that is slow to boot: the process exits
+// with `exitCode` once `exitAfter` has passed on the test clock, or never when
+// `exitAfter` is omitted. `exited` records the process finishing on its own;
+// `released` records the operation letting go of it, which is what kills
+// wsl.exe in production.
+const makeColdStartWsl = (options: {
+  readonly exitCode: number;
+  readonly exitAfter?: Duration.Duration;
+  readonly stdout?: string;
+}) => {
+  const child = { exited: false, released: false };
+  const exitCode =
+    options.exitAfter === undefined
+      ? Effect.never
+      : Effect.sleep(options.exitAfter).pipe(
+          Effect.andThen(
+            Effect.sync(() => {
+              child.exited = true;
+              return ChildProcessSpawner.ExitCode(options.exitCode);
+            }),
+          ),
+        );
+  const spawner = ChildProcessSpawner.make(() =>
+    Effect.gen(function* () {
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          child.released = true;
+        }),
+      );
+      return ChildProcessSpawner.makeHandle({
+        pid: ChildProcessSpawner.ProcessId(1),
+        exitCode,
+        isRunning: Effect.sync(() => !child.exited),
+        kill: () => Effect.void,
+        unref: Effect.succeed(Effect.void),
+        stdin: Sink.drain,
+        stdout: Stream.make(encoder.encode(options.stdout ?? "")),
+        stderr: Stream.empty,
+        all: Stream.empty,
+        getInputFd: () => Sink.drain,
+        getOutputFd: () => Stream.empty,
+      });
+    }),
+  );
+  const layer = Layer.merge(
+    TestClock.layer(),
+    desktopWslEnvironmentLayer.pipe(
+      Layer.provide(
+        Layer.mergeAll(
+          Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, spawner),
+          // Only the availability probe reads the environment, and off Windows
+          // it reads nothing but the platform.
+          Layer.succeed(
+            DesktopEnvironment.DesktopEnvironment,
+            DesktopEnvironment.DesktopEnvironment.of({
+              platform: "linux",
+            } as DesktopEnvironment.DesktopEnvironment["Service"]),
+          ),
+          FileSystem.layerNoop({}),
+        ),
+      ),
+    ),
+  );
+  return { child, layer };
+};
+
+// A cold distro can spend more than 10 seconds in systemd startup before the
+// command runs (#14348), so these operations must outlast that, still stop a
+// command that never finishes, and not hold a fast failure until the deadline.
+describe.each([
+  {
+    name: "preWarm",
+    run: (wsl: DesktopWslEnvironment["Service"]) => wsl.preWarm("Ubuntu"),
+    stdout: "",
+    succeeded: undefined,
+    failed: undefined,
+  },
+  {
+    name: "windowsToWslPath",
+    run: (wsl: DesktopWslEnvironment["Service"]) =>
+      wsl.windowsToWslPath("Ubuntu", "C:\\Users\\dev\\t3code-runtime.tar.gz"),
+    stdout: "/mnt/c/Users/dev/t3code-runtime.tar.gz\n",
+    succeeded: Option.some("/mnt/c/Users/dev/t3code-runtime.tar.gz"),
+    failed: Option.none(),
+  },
+])("$name on a cold distro", (operation) => {
+  it.effect("succeeds when the command finishes after 10 seconds", () => {
+    const wsl = makeColdStartWsl({
+      exitCode: 0,
+      exitAfter: Duration.seconds(12),
+      stdout: operation.stdout,
+    });
+    return Effect.gen(function* () {
+      const fiber = yield* operation.run(yield* DesktopWslEnvironment).pipe(Effect.forkScoped);
+      yield* Effect.yieldNow;
+      yield* TestClock.adjust(Duration.seconds(12));
+      expect(yield* Fiber.join(fiber)).toEqual(operation.succeeded);
+      expect(wsl.child.exited).toBe(true);
+    }).pipe(Effect.provide(wsl.layer));
+  });
+
+  it.effect("stops a stalled command at the 60 second deadline", () => {
+    const wsl = makeColdStartWsl({ exitCode: 0, stdout: operation.stdout });
+    return Effect.gen(function* () {
+      const fiber = yield* operation.run(yield* DesktopWslEnvironment).pipe(Effect.forkScoped);
+      yield* Effect.yieldNow;
+      yield* TestClock.adjust(Duration.seconds(59));
+      expect(fiber.pollUnsafe()).toBeUndefined();
+      expect(wsl.child.released).toBe(false);
+      yield* TestClock.adjust(Duration.seconds(1));
+      expect(yield* Fiber.join(fiber)).toEqual(operation.failed);
+      expect(wsl.child.exited).toBe(false);
+      expect(wsl.child.released).toBe(true);
+    }).pipe(Effect.provide(wsl.layer));
+  });
+
+  it.effect("returns a fast non-zero exit without waiting for the deadline", () => {
+    const wsl = makeColdStartWsl({ exitCode: 1, exitAfter: Duration.zero });
+    // The test clock never advances here, so the operation can only finish if
+    // it did not wait for its deadline.
+    return Effect.gen(function* () {
+      expect(yield* operation.run(yield* DesktopWslEnvironment)).toEqual(operation.failed);
+      expect(wsl.child.exited).toBe(true);
+      expect(wsl.child.released).toBe(true);
+    }).pipe(Effect.provide(wsl.layer));
   });
 });
 
