@@ -229,7 +229,12 @@ export const make = Effect.gen(function* () {
                 const previous = yield* pullRequests.summary(thread.branchPullRequest, {
                   recoverTransientFailure: false,
                 });
-                if (previous.state === "merged" || previous.state === "closed") {
+                // A finished PR stays only while it belongs to the thread's branch.
+                // After a switch to another branch it is unrelated, so it clears.
+                if (
+                  (previous.state === "merged" || previous.state === "closed") &&
+                  previous.headBranch === thread.branch
+                ) {
                   branchPullRequest = thread.branchPullRequest;
                 }
               }

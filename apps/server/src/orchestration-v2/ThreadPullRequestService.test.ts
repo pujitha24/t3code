@@ -319,4 +319,103 @@ describe("ThreadPullRequestServiceV2 reads", () => {
       }),
     ),
   );
+
+  const syncedBranchPullRequest = (previousHeadBranch: string) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const previous = {
+          projectId: ProjectId.make("project-1"),
+          repository: "acme/app",
+          number: 7,
+          url: "https://github.com/acme/app/pull/7",
+        };
+        const thread = {
+          ...threadShell("switched-thread"),
+          branch: "branch-a",
+          branchPullRequest: previous,
+        };
+        const project: OrchestrationProjectShell = {
+          id: ProjectId.make("project-1"),
+          title: "app",
+          workspaceRoot: "/workspace/app",
+          defaultModelSelection: null,
+          scripts: [],
+          createdAt: DateTime.formatIso(NOW),
+          updatedAt: DateTime.formatIso(NOW),
+        };
+        const activation = yield* Deferred.make<void>();
+        const dispatched = yield* Queue.unbounded<unknown>();
+        const reads = yield* Queue.unbounded<void>();
+        const layerDependencies = Layer.mergeAll(
+          Layer.mock(Orchestrator.OrchestratorV2)({
+            streamDomainEvents: Stream.never,
+            getShellSnapshot: () =>
+              Queue.offer(reads, undefined).pipe(
+                Effect.as({
+                  schemaVersion: 2,
+                  snapshotSequence: 1,
+                  threads: [thread],
+                  archivedThreads: [],
+                }),
+              ),
+            dispatch: (command) => Queue.offer(dispatched, command).pipe(Effect.as({} as never)),
+          }),
+          Layer.mock(ProjectStore.ProjectStoreV2)({
+            listShells: () => Effect.succeed([project]),
+            getShell: () => Effect.succeed(Option.some(project)),
+          }),
+          Layer.mock(GitManager.GitManager)({ branchPullRequest: () => Effect.succeed(null) }),
+          Layer.mock(PullRequestService.PullRequestService)({
+            summary: () =>
+              Effect.succeed({ state: "merged", headBranch: previousHeadBranch } as never),
+          }),
+          Layer.mock(RepositoryIdentityResolver.RepositoryIdentityResolver)({
+            resolve: () =>
+              Effect.succeed({
+                canonicalKey: "github.com/acme/app",
+                locator: {
+                  source: "git-remote" as const,
+                  remoteName: "origin",
+                  remoteUrl: "git@github.com:acme/app.git",
+                },
+                displayName: "acme/app",
+              }),
+          }),
+          Layer.succeed(ServerActivation.ServerActivation, Deferred.await(activation)),
+          Layer.succeed(
+            Crypto.Crypto,
+            Crypto.make({
+              randomBytes: (size) => new Uint8Array(size).fill(1),
+              digest: (_algorithm, data) => Effect.succeed(data),
+            }),
+          ),
+          FileSystem.layerNoop({}),
+        );
+
+        return yield* Effect.gen(function* () {
+          const service = yield* ThreadPullRequestService.make;
+          yield* service.start();
+          yield* Deferred.succeed(activation, undefined);
+          // Startup backfill reads the shell snapshot, then runs to completion.
+          yield* Queue.take(reads);
+          yield* service.drain;
+          return (yield* Queue.size(dispatched)) === 0 ? [] : yield* Queue.takeAll(dispatched);
+        }).pipe(Effect.provide(layerDependencies));
+      }),
+    );
+
+  it.effect("clears a finished branch pull request that belongs to another branch", () =>
+    Effect.gen(function* () {
+      const commands = yield* syncedBranchPullRequest("branch-b");
+      expect(commands).toMatchObject([
+        { type: "thread.pull-request.sync", branchPullRequest: null },
+      ]);
+    }),
+  );
+
+  it.effect("keeps a finished branch pull request that belongs to the thread's branch", () =>
+    Effect.gen(function* () {
+      expect(yield* syncedBranchPullRequest("branch-a")).toEqual([]);
+    }),
+  );
 });
