@@ -262,17 +262,28 @@ function tabAudioState(overlay: DesktopPreviewOverlay | null): TabAudioState {
 type SurfaceShortcutEvent = Pick<
   KeyboardEvent,
   "altKey" | "ctrlKey" | "defaultPrevented" | "isComposing" | "key" | "metaKey"
->;
+> & { code?: string };
+
+/**
+ * The letter a bare keypress stands for. Falls back to the physical key only
+ * when the layout types a non-Latin character (Cyrillic, Greek), so Dvorak
+ * and Colemak keep matching what they actually type.
+ */
+export function surfaceShortcutLetter(event: SurfaceShortcutEvent): string {
+  const key = event.key.toLowerCase();
+  if (/^[a-z]$/.test(key)) return key;
+  const physicalLetter = event.code?.match(/^Key([A-Z])$/)?.[1];
+  return physicalLetter ? physicalLetter.toLowerCase() : key;
+}
 
 export function surfaceShortcutActionForKey<
   const Action extends { available: boolean; shortcut: string },
 >(actions: readonly Action[], event: SurfaceShortcutEvent): Action | null {
   if (event.defaultPrevented || event.isComposing) return null;
   if (event.metaKey || event.ctrlKey || event.altKey) return null;
+  const letter = surfaceShortcutLetter(event);
   return (
-    actions.find(
-      (action) => action.available && action.shortcut.toLowerCase() === event.key.toLowerCase(),
-    ) ?? null
+    actions.find((action) => action.available && action.shortcut.toLowerCase() === letter) ?? null
   );
 }
 

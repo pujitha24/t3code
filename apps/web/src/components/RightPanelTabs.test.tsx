@@ -184,6 +184,14 @@ describe("surface shortcuts", () => {
     expect(surfaceShortcutActionForKey(actions, shortcutEvent("d"))).toBeNull();
   });
 
+  it("falls back to the physical key only on non-Latin layouts", () => {
+    expect(surfaceShortcutActionForKey(actions, shortcutEvent("и", { code: "KeyB" }))).toBe(
+      actions[0],
+    );
+    // A layout that types a different Latin letter keeps matching what it types.
+    expect(surfaceShortcutActionForKey(actions, shortcutEvent("x", { code: "KeyB" }))).toBeNull();
+  });
+
   it("leaves modified, composing, and already-handled key events alone", () => {
     expect(surfaceShortcutActionForKey(actions, shortcutEvent("b", { metaKey: true }))).toBeNull();
     expect(
