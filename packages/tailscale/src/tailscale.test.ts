@@ -218,6 +218,52 @@ describe("tailscale", () => {
     });
   });
 
+  describe("macOS app bundle fallback", () => {
+    const appCli = "/Applications/Tailscale.app/Contents/MacOS/Tailscale";
+    const notFound = PlatformError.systemError({
+      _tag: "NotFound",
+      module: "ChildProcess",
+      method: "spawn",
+    });
+    const layerFor = (platform: NodeJS.Platform, commands: Array<string>) =>
+      Layer.merge(
+        Layer.succeed(
+          ChildProcessSpawner.ChildProcessSpawner,
+          ChildProcessSpawner.make((command) => {
+            const name = (command as unknown as { readonly command: string }).command;
+            commands.push(name);
+            return name === appCli
+              ? Effect.succeed(mockHandle({ stdout: tailscaleStatusWithSingleIpJson }))
+              : Effect.fail(notFound);
+          }),
+        ),
+        Layer.succeed(HostProcess.Platform, platform),
+      );
+
+    it.effect("falls back to the app bundle CLI when tailscale is not on PATH", () =>
+      Effect.gen(function* () {
+        const commands: Array<string> = [];
+        const status = yield* readTailscaleStatus.pipe(
+          Effect.provide(layerFor("darwin", commands)),
+        );
+        assert.deepEqual(commands, ["tailscale", appCli]);
+        assert.equal(status.magicDnsName, "desktop.tail.ts.net");
+      }),
+    );
+
+    it.effect("does not try the app bundle path on other platforms", () =>
+      Effect.gen(function* () {
+        const commands: Array<string> = [];
+        const error = yield* readTailscaleStatus.pipe(
+          Effect.flip,
+          Effect.provide(layerFor("linux", commands)),
+        );
+        assert.instanceOf(error, TailscaleCommandSpawnError);
+        assert.deepEqual(commands, ["tailscale"]);
+      }),
+    );
+  });
+
   it.effect("turns spawn defects into typed spawn failures", () => {
     // A non-directory entry on PATH makes node's spawn throw ENOTDIR
     // synchronously. The platform spawner calls `NodeChildProcess.spawn` from

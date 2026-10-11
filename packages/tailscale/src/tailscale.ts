@@ -17,6 +17,43 @@ const TAILSCALE_PROBE_TIMEOUT = Duration.millis(2_500);
 const tailscaleCommandForPlatform = (platform: NodeJS.Platform): "tailscale" | "tailscale.exe" =>
   platform === "win32" ? "tailscale.exe" : "tailscale";
 
+// A GUI-launched app inherits a minimal PATH, and the macOS Tailscale app only
+// ships its CLI inside the app bundle, so `tailscale` alone is not found.
+const MACOS_APP_TAILSCALE_CLI = "/Applications/Tailscale.app/Contents/MacOS/Tailscale";
+
+const tailscaleSpawnCandidates = (platform: NodeJS.Platform, executable: string) =>
+  platform === "darwin" ? [executable, MACOS_APP_TAILSCALE_CLI] : [executable];
+
+/**
+ * Spawns the first candidate that starts. When none do, fails with the first
+ * candidate's error so the reported cause is the plain `tailscale` lookup.
+ */
+const spawnTailscale = <E>(
+  platform: NodeJS.Platform,
+  executable: string,
+  args: readonly string[],
+  toError: (cause: unknown) => E,
+) =>
+  Effect.gen(function* () {
+    const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+    const [first, ...fallbacks] = tailscaleSpawnCandidates(platform, executable);
+    const attempt = (command: string) =>
+      spawner.spawn(ChildProcess.make(command, args)).pipe(
+        // Spawning can also fail as a defect rather than a typed error - a
+        // non-directory entry on PATH makes node throw ENOTDIR synchronously.
+        // `mapError` never sees that, so surface it as a failure here.
+        Effect.mapError(toError),
+        Effect.catchDefect((cause) => Effect.fail(toError(cause))),
+      );
+    return yield* fallbacks.reduce(
+      (previous, command) =>
+        previous.pipe(
+          Effect.catch((firstError) => attempt(command).pipe(Effect.mapError(() => firstError))),
+        ),
+      attempt(first!),
+    );
+  });
+
 const TailscaleCommandContext = {
   executable: Schema.Literals(["tailscale", "tailscale.exe"]),
   subcommand: Schema.Literals(["status", "serve"]),
@@ -216,7 +253,6 @@ export const parseTailscaleStatus = (
 
 export const readTailscaleStatus = Effect.gen(function* () {
   const args = ["status", "--json"];
-  const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const hostPlatform = yield* HostProcess.Platform;
   const executable = tailscaleCommandForPlatform(hostPlatform);
   const commandContext = {
@@ -225,14 +261,11 @@ export const readTailscaleStatus = Effect.gen(function* () {
     argumentCount: args.length,
   };
   return yield* Effect.gen(function* () {
-    const child = yield* spawner.spawn(ChildProcess.make(executable, args)).pipe(
-      Effect.mapError((cause) => new TailscaleCommandSpawnError({ ...commandContext, cause })),
-      // Spawning can also fail as a defect rather than a typed error - a
-      // non-directory entry on PATH makes node throw ENOTDIR synchronously.
-      // `mapError` never sees that, so it would escape as an uncaught error.
-      Effect.catchDefect((cause) =>
-        Effect.fail(new TailscaleCommandSpawnError({ ...commandContext, cause })),
-      ),
+    const child = yield* spawnTailscale(
+      hostPlatform,
+      executable,
+      args,
+      (cause) => new TailscaleCommandSpawnError({ ...commandContext, cause }),
     );
     const [stdout, stderr, exitCode] = yield* Effect.all(
       [
@@ -290,7 +323,6 @@ const runTailscaleCommand = (
   timeoutInput: Duration.Input,
 ): Effect.Effect<void, TailscaleCommandError, ChildProcessSpawner.ChildProcessSpawner> =>
   Effect.gen(function* () {
-    const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
     const hostPlatform = yield* HostProcess.Platform;
     const executable = tailscaleCommandForPlatform(hostPlatform);
     const commandContext = {
@@ -300,11 +332,11 @@ const runTailscaleCommand = (
     };
     const timeout = Duration.fromInputUnsafe(timeoutInput);
     return yield* Effect.gen(function* () {
-      const child = yield* spawner.spawn(ChildProcess.make(executable, args)).pipe(
-        Effect.mapError((cause) => new TailscaleCommandSpawnError({ ...commandContext, cause })),
-        Effect.catchDefect((cause) =>
-          Effect.fail(new TailscaleCommandSpawnError({ ...commandContext, cause })),
-        ),
+      const child = yield* spawnTailscale(
+        hostPlatform,
+        executable,
+        args,
+        (cause) => new TailscaleCommandSpawnError({ ...commandContext, cause }),
       );
       const [stderr, exitCode] = yield* Effect.all(
         [collectStderr(child.stderr), child.exitCode.pipe(Effect.map(Number))],
