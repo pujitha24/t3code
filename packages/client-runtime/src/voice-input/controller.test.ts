@@ -637,4 +637,37 @@ describe("VoiceInputController", () => {
     expect(harness.recorder.record).not.toHaveBeenCalled();
     expect(harness.controller.currentState.error).toContain("background");
   });
+
+  it("records while the transcriber is still preparing and transcribes once it is ready", async () => {
+    const preparation = deferred<PreparedVoiceTranscription>();
+    const harness = createHarness({
+      getTranscriber: () => ({ prepare: () => preparation.promise }),
+    });
+    await harness.controller.start();
+
+    expect(harness.recorder.record).toHaveBeenCalledTimes(1);
+    expect(harness.controller.currentState.phase).toBe("recording");
+
+    const stopping = harness.controller.stop();
+    preparation.resolve(preparedTranscription(async () => "from audio"));
+    await stopping;
+
+    expect(harness.commits).toEqual([expect.objectContaining({ text: "hello from audio" })]);
+    expect(harness.deleted).toContain("file:///voice.m4a");
+  });
+
+  it("discards the recording when preparation fails after recording started", async () => {
+    const preparation = deferred<PreparedVoiceTranscription>();
+    const harness = createHarness({
+      getTranscriber: () => ({ prepare: () => preparation.promise }),
+    });
+    await harness.controller.start();
+    preparation.reject(new Error("model unavailable"));
+    await vi.waitFor(() => expect(harness.controller.currentState.phase).toBe("error"));
+
+    expect(harness.controller.currentState.error).toBe("Could not prepare voice transcription.");
+    expect(harness.recorder.stop).toHaveBeenCalled();
+    await vi.waitFor(() => expect(harness.deleted).toContain("file:///voice.m4a"));
+    expect(harness.commits).toEqual([]);
+  });
 });
