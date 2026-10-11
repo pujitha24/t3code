@@ -71,7 +71,10 @@ export function ManagedRelayAuthProvider({ children }: { readonly children: Reac
 
     if (!isSignedIn || !userId) {
       deactivateManagedRelayAuthentication();
-      if (previousAccount !== null) {
+      // Only a signed-in account turning signed out is a sign-out. A first
+      // signed-out observation (e.g. Clerk loading empty while offline) must
+      // not delete saved relay environments.
+      if (previousAccount !== undefined && previousAccount !== null) {
         void queueAccountCleanup();
       }
     } else {
