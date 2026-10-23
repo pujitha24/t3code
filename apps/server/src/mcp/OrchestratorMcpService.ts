@@ -953,14 +953,17 @@ function jsonText(value: unknown): string {
   }
 }
 
-function turnItemText(item: OrchestrationV2TurnItem): string | null {
+export function turnItemText(item: OrchestrationV2TurnItem): string | null {
   switch (item.type) {
     case "notification":
       return [item.summary, item.detail].filter((part) => part !== undefined).join("\n");
     case "user_message":
     case "assistant_message":
-    case "reasoning":
       return item.text;
+    case "reasoning":
+      // Reading a prior session's reasoning back into a Claude context trips the provider's
+      // reasoning_extraction safeguard; context handoff already omits it for the same reason.
+      return null;
     case "proposed_plan":
       return item.markdown;
     case "todo_list":

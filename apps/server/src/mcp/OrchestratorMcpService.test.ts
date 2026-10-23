@@ -15,6 +15,8 @@ import {
   ProviderInstanceId,
   RunId,
   ThreadId,
+  TurnItemId,
+  type OrchestrationV2TurnItem,
   type OrchestrationV2ServerCommand,
   type OrchestrationV2ThreadProjection,
   type ServerProvider,
@@ -2453,6 +2455,42 @@ describe("OrchestratorMcpService provider resolution", () => {
         }
       }),
   );
+
+  describe("turnItemText", () => {
+    it("omits reasoning text so thread reads never replay it into a provider context", () => {
+      const base = {
+        id: TurnItemId.make("item:reasoning"),
+        threadId: ThreadId.make("thread:text"),
+        runId: RunId.make("run:text"),
+        nodeId: null,
+        providerThreadId: null,
+        providerTurnId: null,
+        nativeItemRef: null,
+        parentItemId: null,
+        ordinal: 1,
+        status: "completed" as const,
+        title: null,
+        startedAt: null,
+        completedAt: null,
+        updatedAt: DateTime.makeUnsafe("2026-09-17T00:00:00Z"),
+      };
+      const reasoning: OrchestrationV2TurnItem = {
+        ...base,
+        type: "reasoning",
+        text: "private reasoning",
+        streaming: false,
+      };
+      const reply: OrchestrationV2TurnItem = {
+        ...base,
+        type: "assistant_message",
+        messageId: MessageId.make("message:text"),
+        text: "visible reply",
+        streaming: false,
+      };
+      assert.isNull(OrchestratorMcpService.turnItemText(reasoning));
+      assert.equal(OrchestratorMcpService.turnItemText(reply), "visible reply");
+    });
+  });
 
   describe("resolveRuntimeMode", () => {
     const muse = {
